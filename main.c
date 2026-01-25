@@ -54,225 +54,198 @@ int read_key(void) {
     return -1;
 }
 
-// ---- RENDER ASCII (terminal) ----
-void render_frame(
-    int W, int H,
-    int puntosL, int puntosR,
-    float x, float y, float ballS,
-    float paddleX, float paddleY, float paddleW, float paddleH,
-    float paddle2X, float paddle2Y, float paddle2W, float paddle2H,
-    int sx, int sy
-) {
-    int CW = W / sx;
-    int CH = H / sy;
+typedef struct 
+{
+    float size; /*tamaño de la bola s de size*/
+    float x; /*posición x*/
+    float y; /*posición y*/
 
-    // NUEVO: render en buffer + una sola escritura para evitar tirones del terminal
-    static char *frame = NULL;
-    static size_t frame_cap = 0;
+    float speedx; /*velocidad x de la bola*/
+    float speedy; /*velocidad y de la bola*/
+}Ball;
 
-    size_t needed = 64 + (size_t)(CH * (CW + 1)) + 128;
-    if (needed > frame_cap) {
-        free(frame);
-        frame = malloc(needed);
-        frame_cap = needed;
-        if (!frame) return;
+typedef struct 
+{
+    float h; /*alto de la pala*/
+    float w; /*ancho de la pala*/
+    float x; /*posición realativa de la pala*/
+    float y; /*posición relativa de la pala*/
+    float speed; /*velocidad de la pala*/
+
+}Paddle;
+
+typedef struct 
+{
+    /*Medidas del mundo*/
+    int w;
+    int h;
+
+    /*Marcador*/
+    int scoreL;
+    int scoreR;
+
+    Ball ball;
+    Paddle p1;
+    Paddle p2;
+
+} Game;
+
+void init_game(Game *g){
+    /*iniciar mundo*/
+    g->w = 160;
+    g->h = 128;
+    g->scoreL = 0;
+    g->scoreR = 0;
+
+    /*iniciar bola*/
+    g->ball.size = 3;
+    g->ball.x = (g->w - g->ball.size)/2;
+    g->ball.y = (g->h - g->ball.size)/2;
+    g->ball.speedx = 120;
+    g->ball.speedy = 0;
+
+    /*iniciar p1*/
+    g->p1.w = 4;
+    g->p1.h = 20;
+    g->p1.speed = 60;
+    g->p1.x = 6;
+    g->p1.y = (g->h - g->p1.h)/2;
+    
+
+    /*iniciar p2*/
+    g->p2.w = 4;
+    g->p2.h = 20;
+    g->p2.speed = 60;
+    g->p2.x = g->w - 6 - g->p2.w;
+    g->p2.y = (g->h - g->p2.h)/2;
+}
+ 
+void update_game(Game *g, float dt){
+
+    g->ball.x += g->ball.speedx * dt;
+    g->ball.y += g->ball.speedy * dt;
+
+    if (g->ball.y <= 0) {
+      g->ball.y = 0;
+      g->ball.speedy = -g->ball.speedy;
+    }
+    if (g->ball.y >= g->h - g->ball.size) {
+        g->ball.y = g->h - g->ball.size;
+        g->ball.speedy = -g->ball.speedy;
     }
 
-    size_t len = 0;
 
-    len += snprintf(frame + len, frame_cap - len,
-                    "\x1b[H""L=%d  R=%d\n\n", puntosL, puntosR);
-
-    for (int cy = 0; cy < CH; cy++) {
-        for (int cx = 0; cx < CW; cx++) {
-
-            // Centro de la celda (evita “desapariciones” con sy grande)
-            float px = cx * sx + sx * 0.5f;
-            float py = cy * sy + sy * 0.5f;
-
-            char c = '.';
-
-            // Línea central
-            if (cx == CW / 2) c = ':';
-
-            // Pala izquierda
-            if (px >= paddleX && px < paddleX + paddleW &&
-                py >= paddleY && py < paddleY + paddleH)
-                c = '|';
-
-            // Pala derecha
-            if (px >= paddle2X && px < paddle2X + paddle2W &&
-                py >= paddle2Y && py < paddle2Y + paddle2H)
-                c = '|';
-
-            float cellL = cx * sx;
-            float cellR = cellL + sx;
-            float cellT = cy * sy;
-            float cellB = cellT + sy;
-
-            float ballL = x;
-            float ballR = x + ballS;
-            float ballT = y;
-            float ballB = y + ballS;
-
-            // Bola (la última para que “tape” lo anterior)
-            if (cellR > ballL && cellL < ballR &&
-                cellB > ballT && cellT < ballB)
-                c = 'O';
-
-            frame[len++] = c;
-        }
-        frame[len++] = '\n';
+    if (g->ball.x <= 0) {
+        g->scoreR++;
+        g->ball.x = (g->w - g->ball.size)/2;
+        g->ball.y = (g->h - g->ball.size)/2;
+        g->ball.speedx = 120;
+        g->ball.speedy = 0;
     }
 
-    // Antes: putchar/fflush → ahora: una sola escritura
-    write(STDOUT_FILENO, frame, len);
+    // Colisión con pala izquierda (p1) solo si la bola va hacia la izquierda
+    if (g->ball.speedx < 0 &&
+        g->ball.x < g->p1.x + g->p1.w &&
+        g->ball.x + g->ball.size > g->p1.x &&
+        g->ball.y < g->p1.y + g->p1.h &&
+        g->ball.y + g->ball.size > g->p1.y)
+    {
+        // Rebotar en X
+        g->ball.speedx = -g->ball.speedx;
+
+        // Sacar la bola fuera de la pala para evitar “pegado”
+        g->ball.x = g->p1.x + g->p1.w;
+
+        // Ángulo según punto de impacto
+        float ballCenter = g->ball.y + g->ball.size * 0.5f;
+        float paddleCenter = g->p1.y + g->p1.h * 0.5f;
+        float hit = ballCenter - paddleCenter;
+        g->ball.speedy = hit * 2.0f;
+    }
+
+    // Colisión con pala derecha (p2) solo si la bola va hacia la derecha
+    if (g->ball.speedx > 0 &&
+        g->ball.x < g->p2.x + g->p2.w &&
+        g->ball.x + g->ball.size > g->p2.x &&
+        g->ball.y < g->p2.y + g->p2.h &&
+        g->ball.y + g->ball.size > g->p2.y)
+    {
+        g->ball.speedx = -g->ball.speedx;
+
+        // Sacar la bola fuera de la pala derecha
+        g->ball.x = g->p2.x - g->ball.size;
+
+        float ballCenter = g->ball.y + g->ball.size * 0.5f;
+        float paddleCenter = g->p2.y + g->p2.h * 0.5f;
+        float hit = ballCenter - paddleCenter;
+        g->ball.speedy = hit * 2.0f;
+    }
+
+
+    if (g->ball.x >= g->w - g->ball.size) {
+        g->scoreL++;
+        g->ball.x = (g->w - g->ball.size)/2;
+        g->ball.y = (g->h - g->ball.size)/2;
+        g->ball.speedx = -120;
+        g->ball.speedy = 0;
+    }
+
+
 }
 
-int main(void){
-    /*Medidas del mundo*/
-    int W = 160;
-    int H = 128;
+void handle_input_pc(Game *g, float dt) {
 
-    /*Bola*/
-    float ballS = 3; /*tamaño de la bola s de size*/
-    float x = (W - ballS) / 2; /*posición x*/
-    float y = (H - ballS) / 2; /*posición y*/
+    int up1 = 0, down1 = 0;
+    int up2 = 0, down2 = 0;
+    int k;
 
-    float vx = 1; /*velocidad x de la bola*/
-    float vy = 0.5; /*velocidad y de la bola*/
+    while ((k = read_key()) != -1) {
 
-    /*pala*/
-    float paddleH = 20; /*alto de la pala*/
+        if (k == 'w') up1 = 1;
+        if (k == 's') down1 = 1;
 
-    float paddleY = (H - paddleH)/2; /*posición relativa de la pala*/
-    float paddle2Y = (H - paddleH)/2;
+        if (k == 27) { // ESC sequence
+            int k2 = read_key();
+            int k3 = read_key();
 
-    float paddleW = 4; /*ancho de la pala*/
-
-    float paddleX = 6; /*posición realativa de la pala*/
-    float paddle2X = 140;
-
-    float paddleV = 60; /*velocidad de la pala*/
-
-    /*Marcador de player 1 y 2*/
-    int puntosL = 0;
-    int puntosR = 0;
-
-    double last = now_seconds();
-    float acc = 0.0f;
-
-    enable_raw_mode();
-
-    printf("\x1b[2J\x1b[H\x1b[?25l");
-    fflush(stdout);
-
-    float render_acc = 0.0f;
-    int sx = 4, sy = 8;   // prueba 4/8 (se ve apaisado)
-
-    while (1){
-
-        double now = now_seconds();
-        float dt = now - last;
-        last = now;
-
-        render_acc += dt;
-
-        x += vx * dt;
-        y += vy * dt;
-
-        /*Si la bola toca el techo rebota pa bajo si toca suelo parriba*/
-        if (y <= 0) vy = -vy;
-        if (y >= H) vy = -vy;
-
-        /*colisiones*/
-        if (x + ballS >= paddleX && x <= paddleX + paddleW &&
-            y + ballS >= paddleY && y <= paddleY + paddleH)
-        {
-            vx = -vx;
-            x = paddleX + paddleW;
-
-            float hit = ((y + ballS/2) - (paddleY + paddleH/2));
-            vy = hit * 2;
+            if (k2 == '[' && k3 == 'A') up2 = 1;    // flecha arriba
+            if (k2 == '[' && k3 == 'B') down2 = 1;  // flecha abajo
         }
 
-        if (vx > 0 && x + ballS >= paddle2X && x <= paddle2X + paddleW &&
-            y + ballS >= paddle2Y && y <= paddle2Y + paddleH)
-        {
-            vx = -vx;
-            x = paddle2X - ballS;
-
-            float hit = ((y + ballS/2) - (paddle2Y + paddleH/2));
-            vy = hit * 2;
+        if (k == 'q') {
+            disable_raw_mode();
+            printf("\x1b[?25h");
+            fflush(stdout);
+            exit(0);
         }
-
-        /*sitema de puntos*/
-        if (x < 0) {
-            puntosR++;
-            x = W/2;
-            y = H/2;
-            vx = -1;
-            vy = 0;
-        }
-
-        if (x > W) {
-            puntosL++;
-            x = W/2;
-            y = H/2;
-            vx = 1;
-            vy = 0;
-        }
-
-        int up = 0, down = 0;
-        int up2 = 0, down2 = 0;   // pala derecha (flechas)
-        int k;
-
-        while ((k = read_key()) != -1)
-        {
-            if (k == 'w') up = 1;
-            if (k == 's') down = 1;
-
-            if (k == 27){
-                int k2 = read_key();
-                int k3 = read_key();
-                if (k2 == '[' && k3 == 'A') up2 = 1;
-                if (k2 == '[' && k3 == 'B') down2 = 1;
-            }
-
-            if (k == 'q'){ // para salir
-                printf("\x1b[?25h");
-                fflush(stdout);
-                disable_raw_mode();
-                return 0;
-            }
-        }
-
-        if (up) paddleY -= paddleV * dt;
-        if (down) paddleY += paddleV * dt;
-        if (up2) paddle2Y -= paddleV * dt;
-        if (down2) paddle2Y += paddleV * dt;
-
-        if (paddleY < 0) paddleY = 0;  /*evitar que la pala se vaya de los bordes*/
-        if (paddleY > H - paddleH) paddleY = H - paddleH;
-
-        if (paddle2Y < 0) paddle2Y = 0;  /*evitar que la pala se vaya de los bordes*/
-        if (paddle2Y > H - paddleH) paddle2Y = H - paddleH;
-
-        acc += dt;
-        if (acc >= 1.0f)
-            acc = 0.0f;
-
-        if (render_acc >= 0.01f) {  // 0.1s => 10 FPS
-            render_frame(W, H, puntosL, puntosR,
-                x, y, ballS,
-                paddleX, paddleY, paddleW, paddleH,
-                paddle2X, paddle2Y, paddleW, paddleH,
-                sx, sy);
-            render_acc = 0.0f;
-        }
-
-        usleep(16000); // ~16 ms → ~60 FPS
     }
 
-    return -1;
+    if (up1)   g->p1.y -= g->p1.speed * dt;
+    if (down1) g->p1.y += g->p1.speed * dt;
+
+    if (up2)   g->p2.y -= g->p2.speed * dt;
+    if (down2) g->p2.y += g->p2.speed * dt;
+
+
+    /*Clamp de las palas*/
+    if (g->p1.y < 0){
+        g->p1.y = 0;
+    } 
+
+    if (g->p1.y > g->h - g->p1.h){
+        g->p1.y = g->h - g->p1.h;
+    }
+
+    if (g->p2.y < 0){
+        g->p2.y = 0;
+    } 
+
+    if (g->p2.y > g->h - g->p2.h){
+        g->p2.y = g->h - g->p2.h;
+    }
+}
+
+
+int main(void){
+
 }
