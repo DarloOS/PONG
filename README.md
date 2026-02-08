@@ -271,9 +271,9 @@ pio run -e esp32dev --target upload --upload-port COM_X
 ```
 
 #### Slave Node (Player 2)
-Compile using `src/main.cpp` from `pong_p2/` directory:
+Compile using `main_player2.cpp`:
 ```bash
-cd ../pong_p2
+cd ../
 pio run -e esp32dev
 pio run -e esp32dev --target upload --upload-port COM_Y
 ```
