@@ -271,7 +271,7 @@ pio run -e esp32dev --target upload --upload-port COM_X
 ```
 
 #### Nodo Esclavo (Jugador 2)
-Compilar usando `src/main.cpp` del directorio `pong_p2/`:
+Compilar usando `main_player2.cpp`:
 ```bash
 cd ../pong_p2
 pio run -e esp32dev
