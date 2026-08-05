@@ -1,5 +1,5 @@
 # Distributed Pong Game - ESP32 Multi-Display System
-
+![Demostración del juego](demo.gif)
 ## Abstract
 
 This project implements a distributed real-time Pong game using two ESP32 microcontrollers communicating via UART protocol over a minijack cable connection. The system employs a master-slave architecture where the master ESP32 (Player 1) executes the complete game logic and physics simulation, while the slave ESP32 (Player 2) acts as a remote controller with display capabilities. Both units feature independent ST7735 TFT displays (160×128 px) for autonomous visualization of the game state.
