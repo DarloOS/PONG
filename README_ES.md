@@ -1,5 +1,5 @@
 # Juego Pong Distribuido - Sistema Multi-Pantalla ESP32
-
+![Demostración del juego](demo.gif)
 ## Resumen
 
 Este proyecto implementa un juego Pong distribuido en tiempo real utilizando dos microcontroladores ESP32 que se comunican mediante protocolo UART a través de una conexión por cable minijack. El sistema emplea una arquitectura maestro-esclavo donde el ESP32 maestro (Jugador 1) ejecuta la lógica completa del juego y la simulación física, mientras que el ESP32 esclavo (Jugador 2) actúa como controlador remoto con capacidades de visualización. Ambas unidades cuentan con pantallas TFT ST7735 independientes (160×128 px) para visualización autónoma del estado del juego.
